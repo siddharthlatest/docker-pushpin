@@ -1,7 +1,7 @@
 #
 # Pushpin Dockerfile
 #
-# https://github.com/sacheendra/docker-pushpin
+# https://github.com/fanout/docker-pushpin
 #
 
 # Pull the base image
@@ -17,16 +17,18 @@ RUN \
   apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys \
     379CE192D401AB61
 
-ENV PUSHPIN_VERSION 1.12.0-1~xenial1
-ENV target app:8080
+ENV PUSHPIN_VERSION 1.10.1-1~xenial1
 
 # Install Pushpin
 RUN \
   apt-get update && \
   apt-get install -y pushpin=$PUSHPIN_VERSION
 
+ARG target=app:8080
+
 # Configure Pushpin
 RUN \
+  echo "* ${target},over_http" > /etc/pushpin/routes && \
   sed -i \
     -e 's/zurl_out_specs=.*/zurl_out_specs=ipc:\/\/\{rundir\}\/pushpin-zurl-in/' \
     -e 's/zurl_out_stream_specs=.*/zurl_out_stream_specs=ipc:\/\/\{rundir\}\/pushpin-zurl-in-stream/' \
@@ -34,10 +36,7 @@ RUN \
     /usr/lib/pushpin/internal.conf && \
   sed -i \
     -e 's/services=.*/services=mongrel2,m2adapter,zurl,pushpin-proxy,pushpin-handler/' \
-    -e 's/push_in_spec=.*/push_in_spec=tcp:\/\/\*:5560/' \
-    -e 's/push_in_http_addr=.*/push_in_http_addr=0.0.0.0/' \
-    -e 's/push_in_sub_spec=.*/push_in_sub_spec=tcp:\/\/\*:5562/' \
-    -e 's/command_spec=.*/command_spec=tcp:\/\/\*:5563/' \
+    -e 's/push_in_http_addr=127.0.0.1/push_in_http_addr=0.0.0.0/' \
     /etc/pushpin/pushpin.conf
 
 # Cleanup
@@ -47,16 +46,10 @@ RUN \
   rm -fr /tmp/*
 
 # Define default command
-CMD ["sh", "-c", "/usr/bin/pushpin --merge-output --port=7999 --route=\"* ${target},over_http\""]
+CMD ["/usr/bin/pushpin"]
 
 # Expose ports.
 # - 7999: HTTP port to forward on to the app
-# - 5560: ZMQ PULL for receiving messages
-# - 5561: HTTP port for receiving messages and commands
-# - 5562: ZMQ SUB for receiving messages
-# - 5563: ZMQ REP for receiving commands
+# - 5561: HTTP port to receive real-time messages to update in the app
 EXPOSE 7999
-EXPOSE 5560
 EXPOSE 5561
-EXPOSE 5562
-EXPOSE 5563
