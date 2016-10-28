@@ -1,43 +1,51 @@
 #
 # Pushpin Dockerfile
 #
-# https://github.com/fanout/docker-pushpin
+# https://github.com/sacheendra/docker-pushpin
 #
 
 # Pull the base image
-FROM ubuntu:16.04
-MAINTAINER Siddharth Kothari <sids.aquarius@gmail.com>
+FROM dockerfile/ubuntu
+MAINTAINER Sacheendra Talluri <sacheendra.t@gmail.com>
 
-# Add private APT repository
+# Install dependencies
 RUN \
   apt-get update && \
-  apt-get install -y apt-transport-https software-properties-common && \
-  echo deb https://dl.bintray.com/fanout/debian fanout-xenial main \
-    | tee /etc/apt/sources.list.d/fanout.list && \
-  apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys \
-    379CE192D401AB61
+  apt-get install -y pkg-config libqt4-dev libqca2-dev \
+  libqca2-plugin-ossl libqjson-dev libzmq3-dev python-zmq \
+  python-setproctitle python-jinja2 python-tnetstring \
+  zurl libzmq3-dev libsqlite3-dev sqlite3
 
-ENV PUSHPIN_VERSION 1.10.1-1~xenial1
+# Install Mongrel2
+RUN \
+  git clone git://github.com/zedshaw/mongrel2.git /tmp/mongrel2 && \
+  cd /tmp/mongrel2 && \
+  git submodule init && git submodule update && \
+  rm -f tests/cert_tests.c && \
+  make clean all && make install
+
+RUN \
+  DOCKER_HOST_IP=`ip route|awk '/default/ { print  $3}'`
 
 # Install Pushpin
-RUN \
-  apt-get update && \
-  apt-get install -y pushpin=$PUSHPIN_VERSION
+RUN git clone git://github.com/fanout/pushpin.git /pushpin
+ 
+RUN \ 
+  cd /pushpin && \
+  git submodule init && git submodule update
 
-ARG target=app:8080
-
-# Configure Pushpin
 RUN \
-  echo "* ${target},over_http" > /etc/pushpin/routes && \
-  sed -i \
-    -e 's/zurl_out_specs=.*/zurl_out_specs=ipc:\/\/\{rundir\}\/pushpin-zurl-in/' \
-    -e 's/zurl_out_stream_specs=.*/zurl_out_stream_specs=ipc:\/\/\{rundir\}\/pushpin-zurl-in-stream/' \
-    -e 's/zurl_in_specs=.*/zurl_in_specs=ipc:\/\/\{rundir\}\/pushpin-zurl-out/' \
-    /usr/lib/pushpin/internal.conf && \
-  sed -i \
-    -e 's/services=.*/services=mongrel2,m2adapter,zurl,pushpin-proxy,pushpin-handler/' \
-    -e 's/push_in_http_addr=127.0.0.1/push_in_http_addr=0.0.0.0/' \
-    /etc/pushpin/pushpin.conf
+  cd /pushpin && \
+  make
+  
+RUN \
+  cd /pushpin && \
+  cp examples/config/pushpin.conf examples/config/internal.conf examples/config/routes .
+
+RUN\
+  cd /pushpin && \
+  echo '*' `ip route|awk '/default/ { print  $3}'`':8080' > routes && \
+  sed -i 's/push_in_http_addr=127.0.0.1/push_in_http_addr=0.0.0.0/' pushpin.conf
 
 # Cleanup
 RUN \
@@ -45,8 +53,11 @@ RUN \
   rm -fr /var/lib/apt/lists/* && \
   rm -fr /tmp/*
 
+# Define working directory
+WORKDIR /pushpin
+
 # Define default command
-CMD ["/usr/bin/pushpin"]
+CMD ["/pushpin/pushpin"]
 
 # Expose ports.
 # - 7999: HTTP port to forward on to the app
