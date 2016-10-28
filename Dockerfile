@@ -6,7 +6,7 @@
 
 # Pull the base image
 FROM ubuntu:16.04
-MAINTAINER Sacheendra Talluri <sacheendra.t@gmail.com>
+MAINTAINER Siddharth Kothari <sids.aquarius@gmail.com>
 
 # Add private APT repository
 RUN \
